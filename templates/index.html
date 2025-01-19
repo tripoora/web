@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pattern Tool</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #121212;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        .btn-big, .btn-small {
+            font-weight: bold;
+            width: 48%;
+            margin: 10px 1%;
+        }
+
+        .btn-big { background-color: #FFEB3B; }
+        .btn-small { background-color: #4FC3F7; }
+
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .form-group, #results {
+            margin-top: 20px;
+        }
+
+        #sequenceLength, .slider {
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 20px;
+            color: white;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: center;
+        }
+
+        th { background-color: #333; }
+
+        .yellow { color: #ffc107; font-weight: bold; }
+        .green { color: #28a745; font-weight: bold; }
+        .red { color: #dc3545; font-weight: bold; }
+
+        #sliderValue { font-weight: bold; }
+
+        /* Large text for pattern display */
+        #patternDisplay {
+            font-size: 30px;
+            word-wrap: break-word;
+            white-space: normal;
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mt-5">Pattern Tool</h1>
+
+        <div id="selectedPattern">
+            <p>Pattern: <span id="patternDisplay">None</span></p>
+        </div>
+
+        <!-- Sequence Length Selector -->
+        <select id="sequenceLength" class="form-control">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="15">15</option>
+        </select>
+
+        <!-- Big and Small Buttons -->
+        <div class="btn-group">
+            <button type="button" class="btn btn-big" id="btnBig">B</button>
+            <button type="button" class="btn btn-small" id="btnSmall">S</button>
+        </div>
+
+        <!-- Slider -->
+        <div class="form-group">
+            <label for="slider">Equal Range: </label>
+            <input type="range" class="slider" id="slider" min="1" max="10" value="4">
+            <p>Range: <span id="sliderValue">4%</span></p>
+        </div>
+
+        <!-- Submit Button -->
+        <button id="submitBtn" class="btn btn-primary btn-block mt-3">Submit</button>
+
+        <!-- Results Display -->
+        <div id="results"></div>
+    </div>
+
+    <script>
+        let selectedPattern = [];
+        let equalRange = 4;
+
+        // Update range value
+        document.getElementById('slider').addEventListener('input', function() {
+            equalRange = this.value;
+            document.getElementById('sliderValue').textContent = equalRange + '%';
+        });
+
+        // Update the displayed pattern
+        function updatePatternDisplay() {
+            const sequenceLength = parseInt(document.getElementById('sequenceLength').value);
+            if (selectedPattern.length > sequenceLength) selectedPattern.shift();
+            // Display the pattern as a comma-separated list with large text
+            document.getElementById('patternDisplay').textContent = selectedPattern.join(', ');
+        }
+
+        // Add "B" or "S" to pattern
+        document.getElementById('btnBig').addEventListener('click', () => { selectedPattern.push('b'); updatePatternDisplay(); });
+        document.getElementById('btnSmall').addEventListener('click', () => { selectedPattern.push('s'); updatePatternDisplay(); });
+
+        // Submit the pattern when the Submit button is clicked
+        document.getElementById('submitBtn').addEventListener('click', function() {
+            const pattern = selectedPattern.join(', '); // Join as comma-separated string
+            // Ensure we have a pattern to send
+            if (!pattern) {
+                alert('Please select a pattern first!');
+                return;
+            }
+
+            // Send pattern via fetch
+            fetch('/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ pattern: pattern })
+            })
+            .then(response => response.json())
+            .then(data => {
+                let resultHtml = "<table><tr><th>Pattern</th><th>S</th><th>B</th><th>Occurrences</th></tr>";
+                data.forEach(row => {
+                    const smallProb = parseFloat(row[1].split(' ')[0]);
+                    const bigProb = parseFloat(row[2].split(' ')[0]);
+
+                    // Apply color logic based on percentage
+                    let smallColor = getColor(smallProb, bigProb);
+                    let bigColor = getColor(bigProb, smallProb);
+
+                    // Use percentage with % sign and color class applied
+                    resultHtml += `<tr><td>${row[0].join(', ')}</td><td class="${smallColor}">${smallProb}%</td><td class="${bigColor}">${bigProb}%</td><td>${row[3]}</td></tr>`;
+                });
+                resultHtml += "</table>";
+                document.getElementById('results').innerHTML = resultHtml;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while fetching the data.');
+            });
+        });
+
+        // Color selection based on probability difference
+        function getColor(prob1, prob2) {
+            const diff = Math.abs(prob1 - prob2);
+            if (diff <= equalRange) return 'yellow';  // If difference is within the threshold, yellow
+            return prob1 > prob2 ? 'green' : 'red';  // Green if prob1 > prob2, otherwise Red
+        }
+    </script>
+</body>
+</html>
