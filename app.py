@@ -1,11 +1,14 @@
 from flask import Flask, render_template, request, jsonify
 import pandas as pd
+import os
 
 app = Flask(__name__)
 
 # Load dataset from CSV with error handling
 try:
-    df = pd.read_csv('sample_updated.csv')  # Ensure this CSV is in the same folder as app.py
+    # Ensure the correct path for deployment (Render's environment sets the working directory to your app folder)
+    csv_path = os.path.join(os.path.dirname(__file__), 'sample_updated.csv')
+    df = pd.read_csv(csv_path)
 except FileNotFoundError:
     print("Error: CSV file not found. Please check the file path.")
     exit()
@@ -13,6 +16,7 @@ except FileNotFoundError:
 df = df.sort_values('gameNumber', ascending=False).reset_index(drop=True)
 df['type'] = df['type'].str.lower()
 
+# Function to find pattern probability
 def find_pattern_probability(pattern):
     sizes = df['type'].tolist()
     pattern_occurrences = 0
@@ -45,6 +49,7 @@ def find_pattern_probability(pattern):
         'pattern_occurrences': pattern_occurrences
     }
 
+# Analyze patterns for input
 def analyze_patterns(input_pattern):
     results = {}
     for length in range(len(input_pattern), 1, -1):
@@ -53,6 +58,7 @@ def analyze_patterns(input_pattern):
         results[tuple(pattern)] = result
     return results
 
+# Routes
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -90,4 +96,6 @@ def analyze():
     return jsonify(table)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Use 0.0.0.0 to ensure it works on Render's environment
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
