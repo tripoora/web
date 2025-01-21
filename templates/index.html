@@ -63,6 +63,13 @@
             text-align: center;
             margin-top: 20px;
         }
+
+        /* Spinner styles */
+        #spinner-container {
+            display: none; /* Initially hidden */
+            text-align: center;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -96,6 +103,34 @@
         <!-- Submit Button -->
         <button id="submitBtn" class="btn btn-primary btn-block mt-3">Submit</button>
 
+        <!-- Spinner -->
+        <div id="spinner-container">
+            <div class="spinner-grow text-primary" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <div class="spinner-grow text-secondary" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <div class="spinner-grow text-success" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <div class="spinner-grow text-danger" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <div class="spinner-grow text-warning" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <div class="spinner-grow text-info" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <div class="spinner-grow text-light" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+            <div class="spinner-grow text-dark" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+        </div>
+
         <!-- Results Display -->
         <div id="results"></div>
     </div>
@@ -114,7 +149,6 @@
         function updatePatternDisplay() {
             const sequenceLength = parseInt(document.getElementById('sequenceLength').value);
             if (selectedPattern.length > sequenceLength) selectedPattern.shift();
-            // Display the pattern as a comma-separated list with large text
             document.getElementById('patternDisplay').textContent = selectedPattern.join(', ');
         }
 
@@ -122,16 +156,18 @@
         document.getElementById('btnBig').addEventListener('click', () => { selectedPattern.push('b'); updatePatternDisplay(); });
         document.getElementById('btnSmall').addEventListener('click', () => { selectedPattern.push('s'); updatePatternDisplay(); });
 
-        // Submit the pattern when the Submit button is clicked
+        // Submit the pattern
         document.getElementById('submitBtn').addEventListener('click', function() {
-            const pattern = selectedPattern.join(', '); // Join as comma-separated string
-            // Ensure we have a pattern to send
+            const pattern = selectedPattern.join(', ');
             if (!pattern) {
                 alert('Please select a pattern first!');
                 return;
             }
 
-            // Send pattern via fetch
+            // Show spinner
+            document.getElementById('spinner-container').style.display = 'block';
+
+            // Fetch data
             fetch('/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -143,28 +179,27 @@
                 data.forEach(row => {
                     const smallProb = parseFloat(row[1].split(' ')[0]);
                     const bigProb = parseFloat(row[2].split(' ')[0]);
-
-                    // Apply color logic based on percentage
                     let smallColor = getColor(smallProb, bigProb);
                     let bigColor = getColor(bigProb, smallProb);
-
-                    // Use percentage with % sign and color class applied
                     resultHtml += `<tr><td>${row[0].join(', ')}</td><td class="${smallColor}">${smallProb}%</td><td class="${bigColor}">${bigProb}%</td><td>${row[3]}</td></tr>`;
                 });
                 resultHtml += "</table>";
                 document.getElementById('results').innerHTML = resultHtml;
+
+                // Hide spinner
+                document.getElementById('spinner-container').style.display = 'none';
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while fetching the data.');
+                document.getElementById('spinner-container').style.display = 'none';
             });
         });
 
-        // Color selection based on probability difference
         function getColor(prob1, prob2) {
             const diff = Math.abs(prob1 - prob2);
-            if (diff <= equalRange) return 'yellow';  // If difference is within the threshold, yellow
-            return prob1 > prob2 ? 'green' : 'red';  // Green if prob1 > prob2, otherwise Red
+            if (diff <= equalRange) return 'yellow';
+            return prob1 > prob2 ? 'green' : 'red';
         }
     </script>
 </body>
