@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import logging
 import asyncio
-from threading import Thread
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, CallbackContext
 
@@ -88,13 +87,11 @@ async def start_bot():
 def get_last_message():
     return jsonify(last_message)
 
-def run_bot():
-    asyncio.run(start_bot())
-
 if __name__ == '__main__':
-    # Start Telegram bot in a separate thread
-    bot_thread = Thread(target=run_bot, daemon=True)
-    bot_thread.start()
+    # Start Telegram bot in an async loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.create_task(start_bot())
     
     # Start Flask app
     port = int(os.environ.get('PORT', 5000))
