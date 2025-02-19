@@ -1,12 +1,16 @@
 from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import os
+import logging
+import asyncio
+from threading import Thread
+from telegram import Update
+from telegram.ext import Application, MessageHandler, filters, CallbackContext
 
 app = Flask(__name__)
 
-# Load dataset from CSV with error handling
+# Load dataset from CSV
 try:
-    # Ensure the correct path for deployment (Render's environment sets the working directory to your app folder)
     csv_path = os.path.join(os.path.dirname(__file__), 'sample_updated.csv')
     df = pd.read_csv(csv_path)
 except FileNotFoundError:
@@ -22,10 +26,8 @@ def find_pattern_probability(pattern):
     pattern_occurrences = 0
     next_small_count = 0
     next_big_count = 0
-
-    # Convert the pattern to lowercase 'small' or 'big'
+    
     pattern = ['small' if p == 's' else 'big' for p in pattern]
-
     for i in range(len(sizes) - len(pattern)):
         if all(sizes[i + j] == pattern[j] for j in range(len(pattern))):
             pattern_occurrences += 1
@@ -36,29 +38,19 @@ def find_pattern_probability(pattern):
                     next_small_count += 1
                 elif next_value == 'big':
                     next_big_count += 1
-
+    
     if pattern_occurrences > 0:
         small_probability = next_small_count / pattern_occurrences
         big_probability = next_big_count / pattern_occurrences
     else:
         small_probability = big_probability = 0
-
+    
     return {
         'small_probability': small_probability,
         'big_probability': big_probability,
         'pattern_occurrences': pattern_occurrences
     }
 
-# Analyze patterns for input
-def analyze_patterns(input_pattern):
-    results = {}
-    for length in range(len(input_pattern), 1, -1):
-        pattern = input_pattern[-length:]  # Consider sub-patterns
-        result = find_pattern_probability(pattern)
-        results[tuple(pattern)] = result
-    return results
-
-# Routes
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -66,36 +58,44 @@ def index():
 @app.route('/analyze', methods=['POST'])
 def analyze():
     input_pattern = request.form['pattern'].lower().strip().split(',')
-    analysis_results = analyze_patterns(input_pattern)
-    
-    table = []
-    for pattern, result in analysis_results.items():
-        sorted_pattern = pattern
-        if result['pattern_occurrences'] > 0:
-            small_prob = result['small_probability'] * 100
-            big_prob = result['big_probability'] * 100
-            diff = abs(small_prob - big_prob)
-            
-            # Apply color formatting based on probability difference
-            if diff <= 2:
-                small_prob_str = f"{small_prob:.2f} %"
-                big_prob_str = f"{big_prob:.2f} %"
-            elif small_prob > big_prob:
-                small_prob_str = f"{small_prob:.2f} %"
-                big_prob_str = f"{big_prob:.2f} %"
-            else:
-                small_prob_str = f"{small_prob:.2f} %"
-                big_prob_str = f"{big_prob:.2f} %"
-            
-            row = [sorted_pattern, small_prob_str, big_prob_str, result['pattern_occurrences']]
-        else:
-            row = [sorted_pattern, "N/A", "N/A", "Pattern not found"]
-        
-        table.append(row)
+    analysis_results = find_pattern_probability(input_pattern)
+    return jsonify(analysis_results)
 
-    return jsonify(table)
+# Telegram Bot Setup
+TOKEN = "7822711424:AAFN2RDVmWisSHhMLHsQt8iD1tkTY84YqUk"
+CHAT_ID = -1002496564742
+last_message = {"text": "No messages yet", "sender": "Unknown"}
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+async def handle_message(update: Update, context: CallbackContext):
+    global last_message
+    message = update.effective_message
+    if message:
+        last_message["text"] = message.text or "[Non-text message]"
+        last_message["sender"] = message.chat.username or message.chat.title or "Unknown"
+        logger.info(f"New Message from {last_message['sender']}: {last_message['text']}")
+
+async def start_bot():
+    bot_app = Application.builder().token(TOKEN).build()
+    bot_app.add_handler(MessageHandler(filters.Chat(CHAT_ID), handle_message))
+    logger.info("Bot started... Listening for new messages...")
+    await bot_app.initialize()
+    await bot_app.start()
+    await bot_app.run_polling()
+
+@app.route('/last_message', methods=['GET'])
+def get_last_message():
+    return jsonify(last_message)
+
+def run_bot():
+    asyncio.run(start_bot())
 
 if __name__ == '__main__':
-    # Use 0.0.0.0 to ensure it works on Render's environment
+    # Start Telegram bot in a separate thread
+    bot_thread = Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    # Start Flask app
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
